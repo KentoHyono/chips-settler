@@ -1,4 +1,5 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
+import html2canvas from "html2canvas";
 import type {Tab, PlayerField, Player, PlayerWithPnl, Settlement, Session, ToastState } from './types/calc'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -96,6 +97,7 @@ export default function PokerSettler(): React.JSX.Element {
   const [settled, setSettled] = useState<boolean>(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [sessions, setSessions] = useState<Session[]>(loadSessions);
+  const resultsRef = useRef<HTMLDivElement>(null);
 
   // ── Toast ─────────────────────────────────────────────────────────────────
 
@@ -190,6 +192,26 @@ export default function PokerSettler(): React.JSX.Element {
     setBuyIn("");
   };
 
+  // ── Load Last Game ────────────────────────────────────────────────────────
+
+  const loadLastGame = (): void => {
+    const lastSession = sessions[0];
+    if (!lastSession) return;
+
+    setBuyIn(lastSession.buyIn.toString());
+    setPlayers(
+      lastSession.players.map((p) => ({
+        id: uid(),
+        name: p.name,
+        extraBuyIn: "",
+        chips: "",
+      }))
+    );
+    showToast("Last game loaded ✓");
+  };
+
+  const hasSavedGame = sessions.length > 0;
+
   // ── Share / Copy ──────────────────────────────────────────────────────────
 
   const buildShareText = (): string => {
@@ -199,16 +221,53 @@ export default function PokerSettler(): React.JSX.Element {
   };
 
   const handleShare = async (): Promise<void> => {
-    const text = buildShareText();
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: "Poker Settlement", text });
-      } catch {
-        // user cancelled — do nothing
+    if (!resultsRef.current) return;
+
+    try {
+      const canvas = await html2canvas(resultsRef.current, {
+        backgroundColor: "#ffffff",
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        onclone: (clonedDoc) => {
+          const clonedRef = clonedDoc.querySelector(".results-capture");
+          if (clonedRef) {
+            // Force all elements to have solid backgrounds
+            clonedRef.querySelectorAll(".settlement-item").forEach((el) => {
+              (el as HTMLElement).style.animation = "none";
+              (el as HTMLElement).style.opacity = "1";
+              (el as HTMLElement).style.background = "#ffffff";
+            });
+          }
+        },
+      });
+
+      const blob = await new Promise<Blob>((resolve) =>
+        canvas.toBlob((b) => resolve(b!), "image/png")
+      );
+
+      const file = new File([blob], "poker-settlement.png", {
+        type: "image/png",
+      });
+
+      if (navigator.share && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            title: "Poker Settlement",
+            files: [file],
+          });
+        } catch {
+          // user cancelled — do nothing
+        }
+      } else {
+        // Fallback: copy image to clipboard
+        await navigator.clipboard.write([
+          new ClipboardItem({ "image/png": blob }),
+        ]);
+        showToast("Image copied to clipboard!");
       }
-    } else {
-      await navigator.clipboard.writeText(text);
-      showToast("Copied to clipboard!");
+    } catch {
+      showToast("Share failed");
     }
   };
 
@@ -252,6 +311,16 @@ export default function PokerSettler(): React.JSX.Element {
       {/* ── Calculator: Input ── */}
       {tab === "calc" && !settled && (
         <>
+          {hasSavedGame && (
+            <button
+              className="btn btn-secondary"
+              style={{ width: "100%", marginBottom: 16 }}
+              onClick={loadLastGame}
+            >
+              ↻ Load Last Game
+            </button>
+          )}
+
           {/* Buy-in */}
           <div className="card">
             <div className="card-title">
@@ -361,55 +430,57 @@ export default function PokerSettler(): React.JSX.Element {
       {/* ── Calculator: Results ── */}
       {tab === "calc" && settled && (
         <>
-          {/* P&L */}
-          <div className="card">
-            <div className="card-title">
-              <span>📊</span> Player Results
-            </div>
-            {withPnl.map((p) => {
-              const pnlClass =
-                p.pnl > 0.005 ? "win" : p.pnl < -0.005 ? "loss" : "even";
-              const pnlLabel =
-                p.pnl > 0.005
-                  ? `▲ +${fmt(p.pnl)}`
-                  : p.pnl < -0.005
-                  ? `▼ −${fmt(Math.abs(p.pnl))}`
-                  : "— even";
-              return (
-                <div className="player-summary-row" key={p.id}>
-                  <div>
-                    <div className="psrow-name">{p.name}</div>
-                    <div className="psrow-chips">{fmt(parseFloat(p.chips))} chips</div>
-                  </div>
-                  <span className={`pnl-badge ${pnlClass}`}>{pnlLabel}</span>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Settlements */}
-          <div className="card">
-            <div className="card-title">
-              <span>🤝</span> Settlements
-            </div>
-
-            {settlements.length === 0 ? (
-              <div className="no-debts">
-                <span className="big-icon">🏆</span>
-                <p>Everyone is square — no debts to settle!</p>
+          <div ref={resultsRef} className="results-capture">
+            {/* P&L */}
+            <div className="card">
+              <div className="card-title">
+                <span>📊</span> Player Results
               </div>
-            ) : (
-              settlements.map((s, i) => (
-                <div className="settlement-item" key={i}>
-                  <span className="s-icon">💸</span>
-                  <div className="s-text">
-                    <div className="s-from">{s.from}</div>
-                    <div className="s-to">→ pays {s.to}</div>
+              {withPnl.map((p) => {
+                const pnlClass =
+                  p.pnl > 0.005 ? "win" : p.pnl < -0.005 ? "loss" : "even";
+                const pnlLabel =
+                  p.pnl > 0.005
+                    ? `▲ +${fmt(p.pnl)}`
+                    : p.pnl < -0.005
+                    ? `▼ −${fmt(Math.abs(p.pnl))}`
+                    : "— even";
+                return (
+                  <div className="player-summary-row" key={p.id}>
+                    <div>
+                      <div className="psrow-name">{p.name}</div>
+                      <div className="psrow-chips">{fmt(parseFloat(p.chips))} chips</div>
+                    </div>
+                    <span className={`pnl-badge ${pnlClass}`}>{pnlLabel}</span>
                   </div>
-                  <div className="s-amount">{fmt(s.amount)}</div>
+                );
+              })}
+            </div>
+
+            {/* Settlements */}
+            <div className="card">
+              <div className="card-title">
+                <span>🤝</span> Settlements
+              </div>
+
+              {settlements.length === 0 ? (
+                <div className="no-debts">
+                  <span className="big-icon">🏆</span>
+                  <p>Everyone is square — no debts to settle!</p>
                 </div>
-              ))
-            )}
+              ) : (
+                settlements.map((s, i) => (
+                  <div className="settlement-item" key={i}>
+                    <span className="s-icon">💸</span>
+                    <div className="s-text">
+                      <div className="s-from">{s.from}</div>
+                      <div className="s-to">→ pays {s.to}</div>
+                    </div>
+                    <div className="s-amount">{fmt(s.amount)}</div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
 
           {/* Actions */}
@@ -481,10 +552,10 @@ export default function PokerSettler(): React.JSX.Element {
                         style={{
                           color:
                             p.pnl > 0
-                              ? "#4caf79"
+                              ? "#16a34a"
                               : p.pnl < 0
-                              ? "#e05a4a"
-                              : "inherit",
+                              ? "#dc2626"
+                              : "#64748b",
                           marginRight: 10,
                         }}
                       >
@@ -504,7 +575,7 @@ export default function PokerSettler(): React.JSX.Element {
                       ))}
                     </div>
                   ) : (
-                    <div className="history-settlements" style={{ color: "#4caf79" }}>
+                    <div className="history-settlements" style={{ color: "#16a34a" }}>
                       No debts — everyone was square
                     </div>
                   )}
@@ -516,7 +587,7 @@ export default function PokerSettler(): React.JSX.Element {
                 style={{
                   width: "100%",
                   marginTop: 8,
-                  color: "rgba(192,57,43,0.6)",
+                  color: "rgba(220, 38, 38, 0.6)",
                 }}
                 onClick={clearHistory}
               >
