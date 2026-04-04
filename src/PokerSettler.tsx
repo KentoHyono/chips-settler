@@ -506,8 +506,8 @@ export default function PokerSettler(): React.JSX.Element {
               <span>🔄</span> Chip Trades
             </div>
             <p className="card-desc">
-              Record when players buy chips directly from another player with cash.
-              This does not change the pot but affects settlement calculations.
+              Record when players buy chips directly from another player with cash that's calculated at the end.
+              This feature is not for on-the-spot payment. 
             </p>
 
             {trades.length > 0 && (
