@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef } from "react";
 import html2canvas from "html2canvas";
-import type {Tab, PlayerField, Player, PlayerWithPnl, Settlement, Session, ToastState } from './types/calc'
+import type {Tab, PlayerField, Player, PlayerWithPnl, Settlement, Session, ToastState, ChipTrade, TradeField, SavedTrade } from './types/calc'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -37,18 +37,47 @@ function persistSessions(sessions: Session[]): void {
   localStorage.setItem(LS_KEY, JSON.stringify(sessions));
 }
 
-function calcSettlements(players: Player[], buyIn: string): Settlement[] {
+function calcSettlements(players: Player[], buyIn: string, trades: ChipTrade[]): Settlement[] {
   const bi = parseFloat(buyIn) || 0;
 
   type Balance = { name: string; net: number };
 
+  // Calculate each player's effective contribution
+  const playerContributions: Record<string, number> = {};
+  players.forEach((p) => {
+    const playerName = p.name || "?";
+    const extraBuyIn = parseFloat(p.extraBuyIn) || 0;
+
+    // Calculate chips sold and bought via trades
+    const chipsSold = trades
+      .filter((t) => t.fromPlayerId === p.id)
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
+    const chipsBought = trades
+      .filter((t) => t.toPlayerId === p.id)
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
+    // effectiveContribution = initialBuyIn + extraBuyIn + chipsBought - chipsSold
+    playerContributions[playerName] = bi + extraBuyIn + chipsBought - chipsSold;
+  });
+
   const creditors: Balance[] = players
-    .map((p) => ({ name: p.name || "?", net: (parseFloat(p.chips) || 0) - bi - (parseFloat(p.extraBuyIn) || 0)}))
+    .map((p) => {
+      const playerName = p.name || "?";
+      const chips = parseFloat(p.chips) || 0;
+      const contribution = playerContributions[playerName] || bi;
+      return { name: playerName, net: chips - contribution };
+    })
     .filter((b) => b.net > 0)
     .sort((a, b) => b.net - a.net);
 
   const debtors: Balance[] = players
-    .map((p) => ({ name: p.name || "?", net: (parseFloat(p.chips) || 0) - bi - (parseFloat(p.extraBuyIn) || 0)}))
+    .map((p) => {
+      const playerName = p.name || "?";
+      const chips = parseFloat(p.chips) || 0;
+      const contribution = playerContributions[playerName] || bi;
+      return { name: playerName, net: chips - contribution };
+    })
     .filter((b) => b.net < 0)
     .sort((a, b) => a.net - b.net);
 
@@ -94,6 +123,7 @@ export default function PokerSettler(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>("calc");
   const [buyIn, setBuyIn] = useState<string>("");
   const [players, setPlayers] = useState<Player[]>(makeDefaultPlayers);
+  const [trades, setTrades] = useState<ChipTrade[]>([]);
   const [settled, setSettled] = useState<boolean>(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const [sessions, setSessions] = useState<Session[]>(loadSessions);
@@ -122,6 +152,28 @@ export default function PokerSettler(): React.JSX.Element {
     );
   };
 
+  // ── Trade operations ──────────────────────────────────────────────────────
+
+  const addTrade = (): void => {
+    setTrades((prev) => [...prev, { id: uid(), fromPlayerId: "", toPlayerId: "", amount: "" }]);
+  };
+
+  const removeTrade = (id: string): void => {
+    setTrades((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const updateTrade = (id: string, field: TradeField, value: string): void => {
+    setTrades((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, [field]: value } : t))
+    );
+  };
+
+  const updateTradePlayer = (id: string, field: "fromPlayerId" | "toPlayerId", value: string): void => {
+    setTrades((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, [field]: value } : t))
+    );
+  };
+
   // ── Derived values ────────────────────────────────────────────────────────
 
   const buyInNum = parseFloat(buyIn) || 0;
@@ -129,12 +181,31 @@ export default function PokerSettler(): React.JSX.Element {
   const totalChips = players.reduce((sum, p) => sum + (parseFloat(p.chips) || 0), 0);
   const chipMismatch = buyIn !== "" && Math.abs(totalChips - pot) > 0.5;
 
-  const settlements = calcSettlements(players, buyIn);
+  // Helper to calculate effective contribution for a player
+  const getEffectiveContribution = (playerId: string): number => {
+    const player = players.find((p) => p.id === playerId);
+    if (!player) return buyInNum;
 
-  const withPnl: PlayerWithPnl[] = players.map((p) => ({
-    ...p,
-    pnl: (parseFloat(p.chips) || 0) - buyInNum - (parseFloat(p.extraBuyIn) || 0),
-  }));
+    const extraBuyIn = parseFloat(player.extraBuyIn) || 0;
+    const chipsSold = trades
+      .filter((t) => t.fromPlayerId === playerId)
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+    const chipsBought = trades
+      .filter((t) => t.toPlayerId === playerId)
+      .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
+    return buyInNum + extraBuyIn + chipsBought - chipsSold;
+  };
+
+  const settlements = calcSettlements(players, buyIn, trades);
+
+  const withPnl: PlayerWithPnl[] = players.map((p) => {
+    const effectiveContribution = getEffectiveContribution(p.id);
+    return {
+      ...p,
+      pnl: (parseFloat(p.chips) || 0) - effectiveContribution,
+    };
+  });
 
   const readyToCalc =
     buyIn !== "" &&
@@ -148,12 +219,24 @@ export default function PokerSettler(): React.JSX.Element {
       id: uid(),
       date: new Date().toISOString(),
       buyIn: buyInNum,
-      players: players.map((p) => ({
-        name: p.name,
-        chips: parseFloat(p.chips) || 0,
-        pnl: (parseFloat(p.chips) || 0) - buyInNum - (parseFloat(p.extraBuyIn) || 0),
-      })),
+      players: players.map((p) => {
+        const effectiveContribution = getEffectiveContribution(p.id);
+        return {
+          name: p.name,
+          chips: parseFloat(p.chips) || 0,
+          pnl: (parseFloat(p.chips) || 0) - effectiveContribution,
+        };
+      }),
       settlements,
+      trades: trades.map((t) => {
+        const fromPlayer = players.find((p) => p.id === t.fromPlayerId);
+        const toPlayer = players.find((p) => p.id === t.toPlayerId);
+        return {
+          from: fromPlayer?.name || "?",
+          to: toPlayer?.name || "?",
+          amount: parseFloat(t.amount) || 0,
+        };
+      }),
     };
     setSessions((prev) => {
       const next = [session, ...prev].slice(0, 30);
@@ -189,6 +272,7 @@ export default function PokerSettler(): React.JSX.Element {
   const resetCalc = (): void => {
     setSettled(false);
     setPlayers(makeDefaultPlayers());
+    setTrades([]);
     setBuyIn("");
   };
 
@@ -199,14 +283,14 @@ export default function PokerSettler(): React.JSX.Element {
     if (!lastSession) return;
 
     setBuyIn(lastSession.buyIn.toString());
-    setPlayers(
-      lastSession.players.map((p) => ({
-        id: uid(),
-        name: p.name,
-        extraBuyIn: "",
-        chips: "",
-      }))
-    );
+    const newPlayers = lastSession.players.map((p) => ({
+      id: uid(),
+      name: p.name,
+      extraBuyIn: "",
+      chips: "",
+    }));
+    setPlayers(newPlayers); 
+
     showToast("Last game loaded ✓");
   };
 
@@ -414,6 +498,77 @@ export default function PokerSettler(): React.JSX.Element {
                 may be inaccurate.
               </p>
             )}
+          </div>
+
+          {/* Chip Trades */}
+          <div className="card">
+            <div className="card-title">
+              <span>🔄</span> Chip Trades
+            </div>
+            <p className="card-desc">
+              Record when players buy chips directly from another player with cash.
+              This does not change the pot but affects settlement calculations.
+            </p>
+
+            {trades.length > 0 && (
+              <div className="trade-label-row">
+                <label>From (sells)</label>
+                <label>To (buys)</label>
+                <label>Amount ($)</label>
+                <div />
+              </div>
+            )}
+
+            {trades.map((t, i) => (
+              <div className="trade-row" key={t.id}>
+                <select
+                  value={t.fromPlayerId}
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                    updateTradePlayer(t.id, "fromPlayerId", e.target.value)
+                  }
+                >
+                  <option value="">Select</option>
+                  {players.map((p) => (
+                    <option key={p.id} value={p.id} disabled={p.id === t.toPlayerId}>
+                      {p.name || `Player ${players.findIndex((x) => x.id === p.id) + 1}`}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={t.toPlayerId}
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                    updateTradePlayer(t.id, "toPlayerId", e.target.value)
+                  }
+                >
+                  <option value="">Select</option>
+                  {players.map((p) => (
+                    <option key={p.id} value={p.id} disabled={p.id === t.fromPlayerId}>
+                      {p.name || `Player ${players.findIndex((x) => x.id === p.id) + 1}`}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  placeholder="0"
+                  value={t.amount}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    updateTrade(t.id, "amount", e.target.value)
+                  }
+                />
+                <button
+                  className="btn-danger"
+                  onClick={() => removeTrade(t.id)}
+                  aria-label={`Remove trade ${i + 1}`}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+
+            <button className="btn btn-secondary mt-8" onClick={addTrade}>
+              + Add Trade
+            </button>
           </div>
 
           <button
