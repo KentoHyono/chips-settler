@@ -87,6 +87,7 @@ export default function App() {
   };
 
   const loadLastGame = (): void => {
+    unsettle(true)
     const lastSession = sessions[0];
     if (!lastSession) return;
 
