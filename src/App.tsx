@@ -118,6 +118,7 @@ export default function App() {
     buyIn !== "" &&
     players.length >= 2 &&
     players.every((p) => p.name.trim() !== "" && p.chips !== "");
+  const screenWidth = window.innerWidth;
 
   return (
     <div className="app">
@@ -137,28 +138,61 @@ export default function App() {
               ↻ Load Last Game
             </button>
           )}
-        <BuyIn
-          buyIn={buyIn}
-          setBuyIn={setBuyIn}
-          players={players}
-        />
 
-        <Players
-          buyIn={buyIn}
-          players={players}
-          addPlayer={addPlayer}
-          removePlayer={removePlayer}
-          updatePlayer={updatePlayer}
-        />
+        {/* Responsive Card Alignment */}
+        {screenWidth >= 900 && (
+          <div className="calc-layout">
+            <div className="calc-left">
+              <BuyIn
+                buyIn={buyIn}
+                setBuyIn={setBuyIn}
+                players={players}
+              />
+  
+              <ChipTrades
+                trades={trades}
+                players={players}
+                addTrade={addTrade}
+                removeTrade={removeTrade}
+                updateTrade={updateTrade}
+                updateTradePlayer={updateTradePlayer}
+              />
+            </div>
+  
+            <Players
+              buyIn={buyIn}
+              players={players}
+              addPlayer={addPlayer}
+              removePlayer={removePlayer}
+              updatePlayer={updatePlayer}
+            />
+          </div>
+        )} 
 
-        <ChipTrades
-          trades={trades}
-          players={players}
-          addTrade={addTrade}
-          removeTrade={removeTrade}
-          updateTrade={updateTrade}
-          updateTradePlayer={updateTradePlayer}
-        />
+        {screenWidth < 900 && (
+          <>
+              <BuyIn
+                buyIn={buyIn}
+                setBuyIn={setBuyIn}
+                players={players}
+              />
+              <Players
+                buyIn={buyIn}
+                players={players}
+                addPlayer={addPlayer}
+                removePlayer={removePlayer}
+                updatePlayer={updatePlayer}
+              />
+              <ChipTrades
+                trades={trades}
+                players={players}
+                addTrade={addTrade}
+                removeTrade={removeTrade}
+                updateTrade={updateTrade}
+                updateTradePlayer={updateTradePlayer}
+              />
+          </>
+        )}
 
         <button
           className="btn btn-primary"

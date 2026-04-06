@@ -1,4 +1,4 @@
-# Chips Settler (v1)
+# Chips Settler (v2)
 
 A mobile‑responsive web app that helps poker players quickly calculate
 who owes money to whom at the end of a home game.
@@ -18,6 +18,7 @@ for each player and generates settlements.
     -   Name
     -   Final chips
     -   Extra buy‑ins (optional)
+    -   In-player chip trades (optional)
 -   Input base buy‑in amount
 -   Automatic profit/loss (PnL) calculation
 -   Automatic settlement calculation (who pays whom)
@@ -36,6 +37,7 @@ for each player and generates settlements.
 ### Session Storage
 
 -   Save previous poker sessions
+-   Load a previous game
 -   View past results in a history tab
 
 ------------------------------------------------------------------------
@@ -46,8 +48,6 @@ Frontend - TypeScript - HTML / CSS - Vite
 
 Cloud / DevOps - AWS S3 (static hosting) - AWS CloudFront (CDN) - GitHub
 (source control)
-
-Future versions may include: - AWS Lambda - API Gateway - DynamoDB
 
 ------------------------------------------------------------------------
 
@@ -86,43 +86,14 @@ Total PnL should equal **0** for normal in‑house poker games.
 ## Running Locally
 
 Install dependencies:
-
-npm install
+```npm install```
 
 Run development server:
-
-npm run dev
+```npm run dev```
 
 Build production version:
-
-npm run build
+```npm run build```
 
 The production build will be generated in the **dist/** folder.
 
 ------------------------------------------------------------------------
-
-## Deployment (AWS)
-
-1.  Run:
-
-npm run build
-
-2.  Upload the contents of **dist/** to an S3 bucket.
-
-3.  Configure the bucket for static website hosting.
-
-4.  Serve the site through CloudFront for CDN and HTTPS.
-
-------------------------------------------------------------------------
-
-## Future Improvements
-
--   Friend list / saved player profiles
--   Sharable link for simultaneous inputs
--   Backend session storage
-
-------------------------------------------------------------------------
-
-## License
-
-MIT License

@@ -30,7 +30,7 @@ body {
 
 #root { min-height: 100dvh; }
 
-.app { max-width: 480px; margin: 0 auto; padding: 50px 16px 80px; }
+.app { max-width: 480px; margin: 0 auto; padding: 20px 16px 80px; }
 
 .header { text-align: center; padding: 36px 0 24px; }
 .header-suit-row { font-size: 20px; letter-spacing: 12px; opacity: 0.3; margin-bottom: 10px; user-select: none; }
@@ -169,4 +169,47 @@ select:disabled { opacity: 0.5; cursor: not-allowed; }
 .results-capture .pnl-badge.even {
   background: #f1f5f9;
   color: #334155;
+}
+
+/* Desktop layout: BuyIn and ChipTrades on left, Players on right */
+@media (min-width: 900px) {
+  .app {
+    max-width: 1000px;
+  }
+
+  .tabs {
+    max-width: 450px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .btn-secondary {
+    max-width: 450px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .btn-primary {
+    max-width: 450px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .calc-layout {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .calc-left {
+    flex: 0 0 350px;
+  }
+
+  .calc-left .card {
+    margin-bottom: 12px;
+  }
+
+  .calc-layout > .card:last-child {
+    flex: 1;
+  }
 }
