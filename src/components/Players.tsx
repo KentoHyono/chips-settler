@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { fmt } from "../helper/utils"
 import type { Player } from "../types/calc"
 
@@ -17,6 +18,11 @@ export default function Players({
   removePlayer,
   updatePlayer
 }:Props){
+
+  // Retain Players value
+  useEffect(() => {
+    localStorage.setItem("players", JSON.stringify(players));
+  }, [players]);
 
   const buyInNum = parseFloat(buyIn) || 0;
   const pot = players.length * buyInNum + players.reduce((sum, p) => sum + parseFloat(p.extraBuyIn || "0"), 0);

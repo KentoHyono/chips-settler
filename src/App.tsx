@@ -14,20 +14,29 @@ import { calcSettlements, loadSessions, makeDefaultPlayers, uid } from "./helper
 import Toast from "./components/Toast"
 
 export default function App() {
-
   const [tab,setTab] = useState<Tab>("calc")
 
-  const [buyIn,setBuyIn] = useState("")
-  const [players,setPlayers] = useState<Player[]>(makeDefaultPlayers())
-  const [trades,setTrades] = useState<ChipTrade[]>([])
+  // Retain values over refresh
+  const [buyIn,setBuyIn] = useState(() => {
+    const saved = localStorage.getItem("buyIn");
+    return saved ? JSON.parse(saved) : "";
+  })
+  const [players,setPlayers] = useState<Player[]>(() => {
+    const saved = localStorage.getItem("players");
+    return saved ? JSON.parse(saved) : makeDefaultPlayers();
+  })
+  const [trades,setTrades] = useState<ChipTrade[]>(() => {
+    const saved = localStorage.getItem("trades");
+    return saved ? JSON.parse(saved) : [];
+  })
+  const [settled,setSettled] = useState((false))
 
-  const [settled,setSettled] = useState(false)
   const [toast, setToast] = useState<ToastState | null>(null);
   const [sessions, setSessions] = useState<Session[]>(loadSessions);
   const resultsRef = useRef<HTMLDivElement>(null)
 
   const settlements = calcSettlements(players, buyIn, trades);
-
+    
   const showToast = useCallback((msg: string): void => {
     setToast({ msg, k: Date.now() });
     setTimeout(() => setToast(null), 2200);

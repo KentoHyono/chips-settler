@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import type { ChipTrade,Player, TradeField } from "../types/calc"
 
 interface Props{
@@ -19,6 +20,11 @@ export default function ChipTrades({
   updateTrade,
   updateTradePlayer
 }:Props){
+
+  // Retain Trades value
+  useEffect(() => {
+    localStorage.setItem("trades", JSON.stringify(trades));
+  }, [trades]);
 
   return(
     <div className="card">
